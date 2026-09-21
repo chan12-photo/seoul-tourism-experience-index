@@ -7,10 +7,22 @@ from .safety import scan_public_tree
 from .transport import nearest_hub_distance
 from .validation import validate_administrative_dongs
 
+STANDARD_STRING_COLUMNS = {
+    "administrative_dong_code",
+    "district",
+    "administrative_dong",
+    "key",
+}
+
+
+def _read_with_string_identifiers(path: str, extra_columns: list[str] | None = None):
+    string_columns = STANDARD_STRING_COLUMNS | set(extra_columns or [])
+    return read_csv(path, dtype={column: "string" for column in string_columns})
+
 
 def _distance_command(args: argparse.Namespace) -> int:
-    origins = read_csv(args.origins)
-    hubs = read_csv(args.hubs)
+    origins = _read_with_string_identifiers(args.origins, [args.origin_id])
+    hubs = _read_with_string_identifiers(args.hubs, [args.hub_name])
     result = nearest_hub_distance(
         origins,
         hubs,
@@ -28,7 +40,7 @@ def _distance_command(args: argparse.Namespace) -> int:
 
 
 def _pca_command(args: argparse.Namespace) -> int:
-    frame = read_csv(args.input)
+    frame = _read_with_string_identifiers(args.input)
     result = fit_first_component(
         frame,
         args.features,
@@ -45,7 +57,7 @@ def _pca_command(args: argparse.Namespace) -> int:
 
 
 def _validate_command(args: argparse.Namespace) -> int:
-    frame = read_csv(args.input)
+    frame = _read_with_string_identifiers(args.input, args.keys)
     errors = validate_administrative_dongs(
         frame, key_columns=args.keys, expected_rows=args.expected_rows
     )
@@ -107,5 +119,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    raise SystemExit(args.handler(args))
-
+    try:
+        exit_code = args.handler(args)
+    except (OSError, ValueError) as exc:
+        parser.exit(status=2, message=f"ERROR: {exc}\n")
+    raise SystemExit(exit_code)

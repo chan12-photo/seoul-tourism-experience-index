@@ -15,10 +15,17 @@ def add_content_metrics(
 ) -> pd.DataFrame:
     """Add content diversity and classification-completion diagnostics."""
     result = frame.copy()
-    result[f"{prefix}_classified_count"] = result.loc[:, list(category_columns)].sum(axis=1)
-    result[f"{prefix}_shannon_entropy"] = shannon_entropy(result, category_columns)
+    categories = list(category_columns)
+    entropy = shannon_entropy(result, categories)
+    counts = result.loc[:, categories].apply(pd.to_numeric, errors="raise")
+    result[f"{prefix}_classified_count"] = counts.sum(axis=1)
+    result[f"{prefix}_shannon_entropy"] = entropy
     total = pd.to_numeric(result[total_poi_column], errors="coerce")
-    if total.isna().any() or (total < 0).any():
+    if (
+        total.isna().any()
+        or not np.isfinite(total.to_numpy(dtype=float)).all()
+        or (total < 0).any()
+    ):
         raise ValueError(f"{total_poi_column} must contain non-negative numeric values")
     classified = pd.to_numeric(result[f"{prefix}_classified_count"], errors="raise")
     if (classified > total).any():
@@ -38,9 +45,12 @@ def add_heritage_metrics(
     """Apply the final log1p transformation used to reduce heritage-count skew."""
     result = frame.copy()
     counts = pd.to_numeric(result[count_column], errors="coerce")
-    if counts.isna().any() or (counts < 0).any():
+    if (
+        counts.isna().any()
+        or not np.isfinite(counts.to_numpy(dtype=float)).all()
+        or (counts < 0).any()
+    ):
         raise ValueError(f"{count_column} must contain non-negative numeric values")
     result["C5_heritage_log_count"] = np.log1p(counts)
     result["C5_heritage_log_score"] = minmax(result["C5_heritage_log_count"])
     return result
-

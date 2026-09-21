@@ -45,9 +45,10 @@ flowchart LR
     Q --> G[좌표 정제·행정동 공간결합]
     G --> C[C축 문화자원 변수]
     G --> D[D축 교통 접근성 변수]
-    C --> P[PCA 제1주성분]
-    D --> P
-    P --> X[A·B·C·D 공급지수]
+    C --> CP[C축 PCA 제1주성분]
+    D --> DP[D축 PCA 제1주성분]
+    CP --> X[A·B·C·D 공급지수]
+    DP --> X
     Y[관광소비·생활인구 수요지수] --> M[공급-수요 사분면]
     X --> M
 ```
@@ -80,16 +81,11 @@ Python 3.11 이상이 필요합니다.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
-python -m pytest
-tei-pipeline check-public .
+make install
+make verify
 ```
 
-공간결합까지 실행하려면 다음 선택 의존성을 설치합니다.
-
-```bash
-python -m pip install -e ".[geo,dev]"
-```
+포트폴리오 이미지를 재생성하려면 [assets/README.md](assets/README.md)의 명령을 사용합니다. 이미지 생성기는 비공개 로컬 입력이 최종 집계값과 일치할 때만 결과를 덮어씁니다.
 
 가장 가까운 관광거점 계산 예시는 다음과 같습니다.
 
@@ -113,6 +109,17 @@ tei-pipeline pca-axis \
   --output data/processed/c_axis_pca.csv
 ```
 
+## 품질 검증
+
+`make verify`와 GitHub Actions는 동일한 핵심 검사를 수행합니다.
+
+- 합성데이터 단위 테스트와 GeoPandas 공간결합 통합 테스트
+- Ruff 린트와 포맷 검사
+- 패키지·스크립트 컴파일과 설치 의존성 무결성 검사
+- 비밀정보, 압축 원본, 제한 데이터 디렉터리와 대용량 파일 공개 차단
+
+별도의 로컬 이미지 생성기는 비공개 최종 산출물의 행 수·집계값·사분면·대표 후보를 검증한 뒤에만 공개 이미지를 갱신합니다.
+
 ## 저장소 구조
 
 ```text
@@ -128,7 +135,11 @@ assets/                 공개 가능한 집계 결과 이미지
 
 원본 압축파일의 API 키, 빅데이터캠퍼스 원천·중간 데이터, 대용량 공간파일, 팀원 개인정보가 포함된 보고서와 발표자료는 이 저장소에 포함하지 않습니다. API 키는 원본에서 삭제하는 것만으로 충분하지 않으며 기존 키를 폐기하고 재발급해야 합니다.
 
-데이터를 추가하기 전 [데이터 공개 정책](docs/data-governance.md)과 [공개 전 체크리스트](docs/publication-checklist.md)를 확인해야 합니다. 현재 저장소에는 제3자 데이터 재배포 권한이 확인되지 않았으므로 코드와 방법론만 공개합니다.
+데이터를 추가하기 전 [데이터 공개 정책](docs/data-governance.md)과 [공개 전 체크리스트](docs/publication-checklist.md)를 확인해야 합니다. 현재 저장소에는 제3자 원천·행정동별 데이터를 포함하지 않고 코드, 방법론과 원자료를 복원할 수 없는 요약 그림만 공개합니다.
+
+## 재현 가능 범위
+
+CI는 합성데이터로 전처리 함수, 거리 계산, PCA, 키 무결성, 실패 조건과 공개 안전 검사를 재현합니다. 다만 원자료 재배포 제한 때문에 제3자가 이 저장소만으로 426개 행정동의 최종 지수를 처음부터 다시 만들 수는 없습니다. 공개 이미지는 로컬 최종 산출물의 행 수·상관계수·사분면 수·주요 집계값을 검증한 뒤 생성하며, 행정동별 값은 포함하지 않습니다. 자세한 범위는 [재현 방법](docs/reproducibility.md)에 기록했습니다.
 
 ## 문서
 
@@ -138,3 +149,7 @@ assets/                 공개 가능한 집계 결과 이미지
 - [기여 범위](docs/contribution.md)
 - [원본 스크립트 대응표](docs/source-script-map.md)
 - [연구 한계](docs/limitations.md)
+- [데이터 공개 정책](docs/data-governance.md)
+- [공개 전 체크리스트](docs/publication-checklist.md)
+- [보안 정책](SECURITY.md)
+- [저작권·재사용 고지](NOTICE.md)

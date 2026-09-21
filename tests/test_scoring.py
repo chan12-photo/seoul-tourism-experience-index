@@ -28,7 +28,12 @@ class ScoringTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing"):
             minmax(pd.Series([1.0, np.nan]))
 
+    def test_entropy_rejects_empty_or_infinite_categories(self) -> None:
+        with self.assertRaisesRegex(ValueError, "At least one"):
+            shannon_entropy(pd.DataFrame({"a": [1]}), [])
+        with self.assertRaisesRegex(ValueError, "infinite"):
+            shannon_entropy(pd.DataFrame({"a": [np.inf], "b": [1]}), ["a", "b"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

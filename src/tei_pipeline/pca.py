@@ -29,6 +29,10 @@ def fit_first_component(
     """
     if len(features) < 2:
         raise ValueError("PCA requires at least two features")
+    if len(features) != len(set(features)):
+        raise ValueError("PCA features must be unique")
+    if score_scale not in {"none", "zscore"}:
+        raise ValueError("score_scale must be 'none' or 'zscore'")
     missing = sorted(set(features) - set(frame.columns))
     if missing:
         raise ValueError(f"Missing PCA features: {missing}")
@@ -37,6 +41,8 @@ def fit_first_component(
     if numeric.isna().any().any():
         bad = numeric.columns[numeric.isna().any()].tolist()
         raise ValueError(f"PCA features contain missing or non-numeric values: {bad}")
+    if not np.isfinite(numeric.to_numpy(dtype=float)).all():
+        raise ValueError("PCA features contain infinite values")
     if len(numeric) < 2:
         raise ValueError("PCA requires at least two rows")
 
@@ -60,8 +66,6 @@ def fit_first_component(
     score_series = pd.Series(scores, index=frame.index, name=name)
     if score_scale == "zscore":
         score_series = zscore(score_series)
-    elif score_scale != "none":
-        raise ValueError("score_scale must be 'none' or 'zscore'")
 
     return PCAResult(
         scores=score_series,
@@ -80,13 +84,16 @@ def combine_axis_scores(
     """Combine axis scores with equal arithmetic weights."""
     if not axis_columns:
         raise ValueError("At least one axis score is required")
+    if len(axis_columns) != len(set(axis_columns)):
+        raise ValueError("Axis score columns must be unique")
     missing = sorted(set(axis_columns) - set(frame.columns))
     if missing:
         raise ValueError(f"Missing axis scores: {missing}")
     scores = frame.loc[:, axis_columns].apply(pd.to_numeric, errors="coerce")
     if scores.isna().any().any():
         raise ValueError("Axis scores contain missing or non-numeric values")
+    if not np.isfinite(scores.to_numpy(dtype=float)).all():
+        raise ValueError("Axis scores contain infinite values")
     if standardize_axes:
         scores = scores.apply(zscore, axis=0)
     return scores.mean(axis=1).rename(output_column)
-

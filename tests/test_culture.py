@@ -38,7 +38,11 @@ class CultureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceed"):
             add_content_metrics(frame, category_columns=["a", "b"], total_poi_column="total")
 
+    def test_infinite_total_is_rejected(self) -> None:
+        frame = pd.DataFrame({"a": [1], "b": [0], "total": [np.inf]})
+        with self.assertRaisesRegex(ValueError, "non-negative numeric"):
+            add_content_metrics(frame, category_columns=["a", "b"], total_poi_column="total")
+
 
 if __name__ == "__main__":
     unittest.main()
-

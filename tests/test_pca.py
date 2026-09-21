@@ -27,7 +27,18 @@ class PCATests(unittest.TestCase):
         np.testing.assert_allclose(standardized, [-1.22474487, 0.0, 1.22474487])
         np.testing.assert_allclose(raw, [0.0, 50.5, 101.0])
 
+    def test_duplicate_and_infinite_features_are_rejected(self) -> None:
+        frame = pd.DataFrame({"x": [1.0, 2.0], "y": [3.0, np.inf]})
+        with self.assertRaisesRegex(ValueError, "unique"):
+            fit_first_component(frame, ["x", "x"])
+        with self.assertRaisesRegex(ValueError, "infinite"):
+            fit_first_component(frame, ["x", "y"])
+
+    def test_infinite_axis_score_is_rejected(self) -> None:
+        frame = pd.DataFrame({"A": [0.0, np.inf], "B": [1.0, 2.0]})
+        with self.assertRaisesRegex(ValueError, "infinite"):
+            combine_axis_scores(frame, ["A", "B"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

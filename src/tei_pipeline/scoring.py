@@ -40,9 +40,18 @@ def zscore(series: pd.Series) -> pd.Series:
 
 def shannon_entropy(frame: pd.DataFrame, columns: Sequence[str]) -> pd.Series:
     """Calculate row-wise Shannon entropy from non-negative category counts."""
-    counts = frame.loc[:, list(columns)].apply(pd.to_numeric, errors="coerce")
+    category_columns = list(columns)
+    if not category_columns:
+        raise ValueError("At least one category column is required")
+    missing = sorted(set(category_columns) - set(frame.columns))
+    if missing:
+        raise ValueError(f"Missing category columns: {missing}")
+
+    counts = frame.loc[:, category_columns].apply(pd.to_numeric, errors="coerce")
     if counts.isna().any().any():
         raise ValueError("Category counts contain missing or non-numeric values")
+    if not np.isfinite(counts.to_numpy(dtype=float)).all():
+        raise ValueError("Category counts contain infinite values")
     if (counts < 0).any().any():
         raise ValueError("Category counts must be non-negative")
 
@@ -53,4 +62,3 @@ def shannon_entropy(frame: pd.DataFrame, columns: Sequence[str]) -> pd.Series:
     np.log(proportions, out=logs, where=proportions > 0)
     entropy = -(proportions * logs).sum(axis=1)
     return pd.Series(entropy, index=frame.index, name="shannon_entropy")
-

@@ -20,4 +20,3 @@ def write_csv(frame: pd.DataFrame, path: str | Path) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(target, index=False, encoding="utf-8-sig")
-

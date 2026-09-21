@@ -62,6 +62,22 @@ def read_csv(path: Path) -> pd.DataFrame:
     raise ValueError(f"Could not decode CSV: {path}")
 
 
+def numeric_column(frame: pd.DataFrame, column: str, *, minimum: float | None = None) -> pd.Series:
+    values = pd.to_numeric(frame[column], errors="coerce")
+    if values.isna().any() or not np.isfinite(values.to_numpy(dtype=float)).all():
+        raise ValueError(f"{column} must contain finite numeric values")
+    if minimum is not None and (values < minimum).any():
+        raise ValueError(f"{column} must not contain values below {minimum}")
+    return values
+
+
+def integer_sum(frame: pd.DataFrame, column: str) -> int:
+    values = numeric_column(frame, column, minimum=0.0)
+    if not np.allclose(values, np.round(values)):
+        raise ValueError(f"{column} must contain whole-number counts")
+    return int(values.sum())
+
+
 def load_final_results(path: Path) -> tuple[pd.DataFrame, dict[str, float | int]]:
     frame = read_csv(path)
     required = {"자치구", "행정동명", FINAL_Y, *AXIS_SCORES}
@@ -72,8 +88,19 @@ def load_final_results(path: Path) -> tuple[pd.DataFrame, dict[str, float | int]
         raise ValueError(f"Expected 426 administrative dongs, found {len(frame)}")
 
     result = frame.copy()
+    keys = result[["자치구", "행정동명"]]
+    if (
+        keys.isna().any().any()
+        or keys.astype("string").apply(lambda x: x.str.strip().eq("")).any().any()
+    ):
+        raise ValueError("Administrative-dong keys must not be missing or blank")
+    if keys.duplicated().any():
+        raise ValueError("Administrative-dong keys must be unique")
+
+    for column in AXIS_SCORES:
+        result[column] = numeric_column(result, column)
     result["supply"] = result[AXIS_SCORES].mean(axis=1)
-    result["demand"] = pd.to_numeric(result[FINAL_Y], errors="raise")
+    result["demand"] = numeric_column(result, FINAL_Y)
     x_median = float(result["supply"].median())
     y_median = float(result["demand"].median())
     result["quadrant"] = np.select(
@@ -95,11 +122,11 @@ def load_final_results(path: Path) -> tuple[pd.DataFrame, dict[str, float | int]
         raise ValueError(f"Unexpected supply-demand correlation: {correlation}")
 
     for (district, dong), expected_scores in CANDIDATES.items():
-        candidate = result.loc[
-            (result["자치구"] == district) & (result["행정동명"] == dong)
-        ]
+        candidate = result.loc[(result["자치구"] == district) & (result["행정동명"] == dong)]
         if len(candidate) != 1:
-            raise ValueError(f"Expected one candidate row for {district} {dong}, found {len(candidate)}")
+            raise ValueError(
+                f"Expected one candidate row for {district} {dong}, found {len(candidate)}"
+            )
         row = candidate.iloc[0]
         if row["quadrant"] != "Q4":
             raise ValueError(f"Expected {district} {dong} in Q4, found {row['quadrant']}")
@@ -136,17 +163,17 @@ def load_cd_stats(archive_root: Path) -> dict[str, float | int | dict[str, int]]
         raise ValueError("Every C/D administrative-dong output must contain 426 rows")
 
     stats: dict[str, float | int | dict[str, int]] = {
-        "culture_mapped": int(c1["C1_culture_space_count"].sum()),
-        "tourist_valid": int(c2["C2_tourist_attraction_count"].sum()),
-        "tourist_classified": int(c3["C3_total_classified_count"].sum()),
-        "tourist_support": int(c3["C3_support_excluded_count"].sum()),
-        "tourist_unknown": int(c3["C3_unknown_count"].sum()),
-        "heritage_counted": int(heritage["C4_heritage_count"].sum()),
-        "subway_count": int(subway["D1_subway_count"].sum()),
-        "bus_count": int(bus["D4_bus_stop_count"].sum()),
-        "distance_min": float(distance["D3_min_distance_km"].min()),
-        "distance_max": float(distance["D3_min_distance_km"].max()),
-        "distance_mean": float(distance["D3_min_distance_km"].mean()),
+        "culture_mapped": integer_sum(c1, "C1_culture_space_count"),
+        "tourist_valid": integer_sum(c2, "C2_tourist_attraction_count"),
+        "tourist_classified": integer_sum(c3, "C3_total_classified_count"),
+        "tourist_support": integer_sum(c3, "C3_support_excluded_count"),
+        "tourist_unknown": integer_sum(c3, "C3_unknown_count"),
+        "heritage_counted": integer_sum(heritage, "C4_heritage_count"),
+        "subway_count": integer_sum(subway, "D1_subway_count"),
+        "bus_count": integer_sum(bus, "D4_bus_stop_count"),
+        "distance_min": float(numeric_column(distance, "D3_min_distance_km", minimum=0.0).min()),
+        "distance_max": float(numeric_column(distance, "D3_min_distance_km", minimum=0.0).max()),
+        "distance_mean": float(numeric_column(distance, "D3_min_distance_km", minimum=0.0).mean()),
         "nearest_hubs": {
             str(key): int(value)
             for key, value in distance["nearest_hub_by_distance"].value_counts().items()
@@ -156,6 +183,8 @@ def load_cd_stats(archive_root: Path) -> dict[str, float | int | dict[str, int]]
         "culture_mapped": 1051,
         "tourist_valid": 1009,
         "tourist_classified": 696,
+        "tourist_support": 173,
+        "tourist_unknown": 140,
         "heritage_counted": 271,
         "subway_count": 333,
         "bus_count": 11222,
@@ -163,6 +192,19 @@ def load_cd_stats(archive_root: Path) -> dict[str, float | int | dict[str, int]]
     for key, value in expected.items():
         if stats[key] != value:
             raise ValueError(f"Unexpected {key}: {stats[key]}")
+
+    expected_distances = {
+        "distance_min": 0.291316,
+        "distance_mean": 6.540053,
+        "distance_max": 15.412902,
+    }
+    for key, expected_value in expected_distances.items():
+        if not np.isclose(float(stats[key]), expected_value, atol=1e-6):
+            raise ValueError(f"Unexpected {key}: {stats[key]}")
+
+    expected_hubs = {"명동역": 140, "홍대입구역": 132, "강남역": 124, "서울역": 30}
+    if stats["nearest_hubs"] != expected_hubs:
+        raise ValueError(f"Unexpected nearest-hub distribution: {stats['nearest_hubs']}")
     return stats
 
 
@@ -194,7 +236,14 @@ def add_round_box(
 
 def draw_overview(frame: pd.DataFrame, stats: dict[str, float | int], output: Path) -> None:
     fig = plt.figure(figsize=(12, 7.5), dpi=160, facecolor=BACKGROUND)
-    fig.text(0.055, 0.935, "서울 관광경험지수: 공급과 수요의 불균형", fontsize=24, weight="bold", color=INK)
+    fig.text(
+        0.055,
+        0.935,
+        "서울 관광경험지수: 공급과 수요의 불균형",
+        fontsize=24,
+        weight="bold",
+        color=INK,
+    )
     fig.text(
         0.055,
         0.895,
@@ -236,9 +285,7 @@ def draw_overview(frame: pd.DataFrame, stats: dict[str, float | int], output: Pa
         ("강동구", "상일2동"): (-72, 14),
     }
     for (district, dong), offset in highlights.items():
-        row = frame.loc[
-            (frame["자치구"] == district) & (frame["행정동명"] == dong)
-        ].iloc[0]
+        row = frame.loc[(frame["자치구"] == district) & (frame["행정동명"] == dong)].iloc[0]
         ax.scatter(
             [row["supply"]],
             [row["demand"]],
@@ -282,7 +329,9 @@ def draw_overview(frame: pd.DataFrame, stats: dict[str, float | int], output: Pa
     panel.set_axis_off()
     add_round_box(panel, 0, 0.78, 1, 0.20, facecolor="#EEF3FF", edgecolor="#CAD7FA")
     panel.text(0.06, 0.925, "Pearson r", fontsize=10, color=MUTED, va="top")
-    panel.text(0.06, 0.845, f"{float(stats['correlation']):.3f}", fontsize=28, weight="bold", color=BLUE)
+    panel.text(
+        0.06, 0.845, f"{float(stats['correlation']):.3f}", fontsize=28, weight="bold", color=BLUE
+    )
     panel.text(0.52, 0.925, "4사분면", fontsize=10, color=MUTED, va="top")
     panel.text(0.52, 0.845, f"{int(stats['q4_count'])}개", fontsize=28, weight="bold", color=TEAL)
 
@@ -332,7 +381,9 @@ def draw_cd_pipeline(stats: dict[str, float | int | dict[str, int]], output: Pat
     fig = plt.figure(figsize=(12, 7.2), dpi=160, facecolor=BACKGROUND)
     ax = fig.add_axes((0, 0, 1, 1))
     ax.set_axis_off()
-    ax.text(0.055, 0.93, "담당 범위: C 문화자원 · D 교통 접근성", fontsize=24, weight="bold", color=INK)
+    ax.text(
+        0.055, 0.93, "담당 범위: C 문화자원 · D 교통 접근성", fontsize=24, weight="bold", color=INK
+    )
     ax.text(
         0.055,
         0.885,
@@ -343,15 +394,30 @@ def draw_cd_pipeline(stats: dict[str, float | int | dict[str, int]], output: Pat
 
     ax.text(0.055, 0.80, "C축  문화자원", fontsize=15, weight="bold", color=TEAL)
     culture_boxes = [
-        ("문화공간", "1,052건 입력", f"{int(stats['culture_mapped']):,}건 공간결합", "좌표·경계 미매칭 1건"),
-        ("관광지", "5개 언어 2,358건", f"유효 좌표 {int(stats['tourist_valid']):,}건", "주소→키워드 2단계 지오코딩"),
+        (
+            "문화공간",
+            "1,052건 입력",
+            f"{int(stats['culture_mapped']):,}건 공간결합",
+            "좌표·경계 미매칭 1건",
+        ),
+        (
+            "관광지",
+            "5개 언어 2,358건",
+            f"유효 좌표 {int(stats['tourist_valid']):,}건",
+            "주소→키워드 2단계 지오코딩",
+        ),
         (
             "콘텐츠 분류",
             f"분류 {int(stats['tourist_classified']):,}건",
             f"완료율 {int(stats['tourist_classified']) / int(stats['tourist_valid']):.1%}",
             f"지원시설 {int(stats['tourist_support']):,} · 미분류 {int(stats['tourist_unknown']):,}",
         ),
-        ("장소형 문화유산", "2,079건 수집 → 1,992건", f"최종 집계 {int(stats['heritage_counted']):,}건", "무형유산 제외·지오코딩 검증"),
+        (
+            "장소형 문화유산",
+            "2,079건 수집 → 1,992건",
+            f"최종 집계 {int(stats['heritage_counted']):,}건",
+            "무형유산 제외·지오코딩 검증",
+        ),
     ]
     for index, (title, line1, line2, note) in enumerate(culture_boxes):
         x = 0.055 + index * 0.232
@@ -371,17 +437,33 @@ def draw_cd_pipeline(stats: dict[str, float | int | dict[str, int]], output: Pat
 
     ax.text(0.055, 0.47, "D축  교통 접근성", fontsize=15, weight="bold", color=BLUE)
     hubs = stats["nearest_hubs"]
-    assert isinstance(hubs, dict)
+    if not isinstance(hubs, dict):
+        raise TypeError("nearest_hubs must be a dictionary")
     transport_boxes = [
-        ("D1 지하철", f"역 {int(stats['subway_count']):,}개", "행정동 공간결합", "고유 역 식별자 중복 제거"),
-        ("D2 거점거리", "426동 × 4거점 = 1,704쌍", f"평균 {float(stats['distance_mean']):.2f} km", "Haversine 직선거리"),
+        (
+            "D1 지하철",
+            f"역 {int(stats['subway_count']):,}개",
+            "행정동 공간결합",
+            "고유 역 식별자 중복 제거",
+        ),
+        (
+            "D2 거점거리",
+            "426동 × 4거점 = 1,704쌍",
+            f"평균 {float(stats['distance_mean']):.2f} km",
+            "Haversine 직선거리",
+        ),
         (
             "최근접 거점",
             f"명동 {hubs.get('명동역', 0)} · 홍대 {hubs.get('홍대입구역', 0)}",
             f"강남 {hubs.get('강남역', 0)} · 서울역 {hubs.get('서울역', 0)}",
             f"범위 {float(stats['distance_min']):.2f}–{float(stats['distance_max']):.2f} km",
         ),
-        ("D3 버스", f"정류장 {int(stats['bus_count']):,}개", "행정동 공간결합", "고유 정류장 중복 제거"),
+        (
+            "D3 버스",
+            f"정류장 {int(stats['bus_count']):,}개",
+            "행정동 공간결합",
+            "고유 정류장 중복 제거",
+        ),
     ]
     for index, (title, line1, line2, note) in enumerate(transport_boxes):
         x = 0.055 + index * 0.232
@@ -401,9 +483,21 @@ def draw_cd_pipeline(stats: dict[str, float | int | dict[str, int]], output: Pat
 
     add_round_box(ax, 0.055, 0.075, 0.90, 0.095, facecolor="#EDF2FA", edgecolor="#CAD5E5")
     ax.text(0.075, 0.135, "팀 통합 분석으로 전달", fontsize=10, color=MUTED, va="center")
-    ax.text(0.255, 0.135, "C축 PC1 설명력 51.454%", fontsize=12.5, weight="bold", color=TEAL, va="center")
-    ax.text(0.49, 0.135, "D축 PC1 설명력 42.468%", fontsize=12.5, weight="bold", color=BLUE, va="center")
-    ax.text(0.73, 0.135, "426행 키·결측·범위 검증", fontsize=12.5, weight="bold", color=INK, va="center")
+    ax.text(
+        0.255,
+        0.135,
+        "C축 PC1 설명력 51.454%",
+        fontsize=12.5,
+        weight="bold",
+        color=TEAL,
+        va="center",
+    )
+    ax.text(
+        0.49, 0.135, "D축 PC1 설명력 42.468%", fontsize=12.5, weight="bold", color=BLUE, va="center"
+    )
+    ax.text(
+        0.73, 0.135, "426행 키·결측·범위 검증", fontsize=12.5, weight="bold", color=INK, va="center"
+    )
     ax.text(
         0.075,
         0.097,

@@ -12,6 +12,8 @@ def validate_administrative_dongs(
 ) -> list[str]:
     """Return human-readable validation errors for an administrative-dong table."""
     errors: list[str] = []
+    if not key_columns:
+        return ["at least one key column is required"]
     missing = sorted(set(key_columns) - set(frame.columns))
     if missing:
         return [f"missing key columns: {missing}"]
@@ -19,6 +21,11 @@ def validate_administrative_dongs(
         errors.append(f"expected {expected_rows} rows, found {len(frame)}")
     if frame.loc[:, list(key_columns)].isna().any().any():
         errors.append("key columns contain missing values")
+    blank_columns = [
+        column for column in key_columns if frame[column].astype("string").str.strip().eq("").any()
+    ]
+    if blank_columns:
+        errors.append(f"key columns contain blank values: {blank_columns}")
     duplicate_count = int(frame.duplicated(list(key_columns)).sum())
     if duplicate_count:
         errors.append(f"found {duplicate_count} duplicate key rows")
@@ -48,4 +55,3 @@ def validate_numeric_columns(
         if maximum is not None and (values > maximum).any():
             errors.append(f"{column} contains values above {maximum}")
     return errors
-

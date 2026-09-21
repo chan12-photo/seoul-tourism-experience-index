@@ -5,9 +5,19 @@
 - Python 3.11 이상
 - 기본 분석: NumPy, pandas
 - 공간처리: GeoPandas, Shapely, Pyogrio
+- 포트폴리오 시각화: Matplotlib
 - 테스트: pytest
 
 `pyproject.toml`이 직접 의존성을 정의합니다. 완전히 동일한 실행환경이 필요한 공개 시점에는 잠금파일을 추가하고 데이터 버전과 해시를 함께 고정해야 합니다.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+make install
+make verify
+```
+
+`make verify`는 테스트, 린트, 포맷 검사, 모듈 컴파일, 의존성 무결성, 공개 안전 검사를 CI와 같은 범위로 실행합니다.
 
 ## 권장 파이프라인
 
@@ -52,4 +62,3 @@ tei-pipeline check-public .
 ## 현재 재현 범위
 
 공개 버전은 원자료 재배포 제한 때문에 전체 결과 CSV를 포함하지 않습니다. 따라서 현재 CI는 실제 연구 수치가 아니라 합성데이터로 변환 함수, PCA, 검증과 보안검사를 테스트합니다. 실제 수치 재현을 주장하려면 승인된 입력자료, 해시, 실행 로그를 별도로 확보해야 합니다.
-

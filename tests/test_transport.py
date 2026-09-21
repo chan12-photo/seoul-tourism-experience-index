@@ -45,7 +45,29 @@ class TransportTests(unittest.TestCase):
         np.testing.assert_allclose(result["D2_access"], [-2.5, -4.0])
         self.assertIn("D3_bus_stop_count", result.columns)
 
+    def test_invalid_coordinates_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "latitude"):
+            haversine_km([127.0], [91.0], [127.1], [37.5])
+        with self.assertRaisesRegex(ValueError, "infinite"):
+            haversine_km([np.inf], [37.5], [127.1], [37.5])
+
+    def test_transport_tables_must_have_matching_keys(self) -> None:
+        subway = pd.DataFrame(
+            {
+                "administrative_dong_code": ["1"],
+                "district": ["A"],
+                "administrative_dong": ["one"],
+                "key": ["A_one"],
+                "D1_subway_count": [1],
+            }
+        )
+        distance = subway.drop(columns="D1_subway_count").assign(D2_min_distance_km=2.5)
+        bus = subway.drop(columns="D1_subway_count").assign(
+            administrative_dong_code="2", D3_bus_stop_count=10
+        )
+        with self.assertRaisesRegex(ValueError, "do not match"):
+            build_transport_features(subway, distance, bus)
+
 
 if __name__ == "__main__":
     unittest.main()
-
