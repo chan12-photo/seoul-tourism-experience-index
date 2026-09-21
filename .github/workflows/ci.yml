@@ -13,7 +13,8 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: python -m pip install -e ".[dev]"
+      - run: python -m pip install -e ".[dev,viz]"
       - run: python -m pytest
-      - run: python -m ruff check src tests
+      - run: python -m ruff check src tests scripts
+      - run: python -m py_compile scripts/build_portfolio_assets.py
       - run: tei-pipeline check-public .

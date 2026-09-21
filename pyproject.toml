@@ -14,6 +14,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+viz = [
+  "matplotlib>=3.9,<4",
+]
 geo = [
   "geopandas>=1.0,<2",
   "pyogrio>=0.9,<1",
@@ -37,4 +40,3 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-
