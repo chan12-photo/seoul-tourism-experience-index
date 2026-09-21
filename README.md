@@ -1,5 +1,7 @@
 # Seoul Tourism Experience Index
 
+[![CI](https://github.com/chan12-photo/seoul-tourism-experience-index/actions/workflows/ci.yml/badge.svg)](https://github.com/chan12-photo/seoul-tourism-experience-index/actions/workflows/ci.yml)
+
 서울시 426개 행정동의 관광 공급과 외국인 관광수요를 비교해, 수요에 비해 관광 경험 기반이 부족한 지역을 찾은 팀 프로젝트입니다. 이 저장소는 프로젝트 전체 중 **문화자원(C축)과 교통 접근성(D축) 데이터 파이프라인**을 공개 가능한 형태로 재구성한 포트폴리오 버전입니다.
 
 ## 핵심 질문
@@ -127,4 +129,3 @@ artifacts/              공개 승인된 그림과 결과물 배치 위치
 - [기여 범위](docs/contribution.md)
 - [원본 스크립트 대응표](docs/source-script-map.md)
 - [연구 한계](docs/limitations.md)
-
