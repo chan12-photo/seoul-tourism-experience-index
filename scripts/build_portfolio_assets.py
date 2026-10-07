@@ -306,6 +306,9 @@ def draw_overview(frame: pd.DataFrame, stats: dict[str, float | int], output: Pa
             arrowprops={"arrowstyle": "-", "color": MUTED, "linewidth": 0.8},
         )
 
+    # Leave room below the lowest points so the bottom quadrant labels never cover data.
+    data_ymin = float(frame["demand"].min())
+    ax.set_ylim(data_ymin - 0.12 * (ax.get_ylim()[1] - data_ymin), ax.get_ylim()[1])
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
     labels = {
@@ -316,7 +319,23 @@ def draw_overview(frame: pd.DataFrame, stats: dict[str, float | int], output: Pa
     }
     for quadrant, (x, y, ha, va) in labels.items():
         color, label = quadrant_style[quadrant]
-        ax.text(x, y, label, ha=ha, va=va, fontsize=9.5, color=color, weight="bold")
+        ax.text(
+            x,
+            y,
+            label,
+            ha=ha,
+            va=va,
+            fontsize=9.5,
+            color=color,
+            weight="bold",
+            zorder=6,
+            bbox={
+                "boxstyle": "round,pad=0.3",
+                "facecolor": WHITE,
+                "edgecolor": "none",
+                "alpha": 0.92,
+            },
+        )
 
     ax.set_xlabel("관광 경험 공급지수 X  →", fontsize=11, color=INK, labelpad=9)
     ax.set_ylabel("외국인 관광수요 Y  →", fontsize=11, color=INK, labelpad=9)
@@ -328,17 +347,25 @@ def draw_overview(frame: pd.DataFrame, stats: dict[str, float | int], output: Pa
     panel = fig.add_axes((0.72, 0.16, 0.23, 0.66))
     panel.set_axis_off()
     add_round_box(panel, 0, 0.78, 1, 0.20, facecolor="#EEF3FF", edgecolor="#CAD7FA")
-    panel.text(0.06, 0.925, "Pearson r", fontsize=10, color=MUTED, va="top")
+    panel.text(0.06, 0.965, "공급·수요 상관 r", fontsize=10, color=MUTED, va="top")
     panel.text(
-        0.06, 0.845, f"{float(stats['correlation']):.3f}", fontsize=28, weight="bold", color=BLUE
+        0.06,
+        0.915,
+        f"{float(stats['correlation']):.3f}",
+        fontsize=26,
+        weight="bold",
+        color=BLUE,
+        va="top",
     )
-    panel.text(0.52, 0.925, "4사분면", fontsize=10, color=MUTED, va="top")
-    panel.text(0.52, 0.845, f"{int(stats['q4_count'])}개", fontsize=28, weight="bold", color=TEAL)
+    panel.text(0.56, 0.965, "4사분면", fontsize=10, color=MUTED, va="top")
+    panel.text(
+        0.56, 0.915, f"{int(stats['q4_count'])}개", fontsize=26, weight="bold", color=TEAL, va="top"
+    )
 
     candidates = [
         ("관악구 중앙동", "A 음식 2.75 · 전체 5위", "시장·노포 미식 다국어 코스", ORANGE),
         ("강북구 우이동", "C 3.04 · D 1.56", "등산·역사·한옥 하루 코스", TEAL),
-        ("강동구 상일2동", "B 상권 3.58 · 관찰형", "생활형 쇼핑·산책 코스", PURPLE),
+        ("강동구 상일2동", "B 상권 3.58 · 신설 동, 해석 주의", "생활형 쇼핑·산책 코스", PURPLE),
     ]
     for index, (name, evidence, action, color) in enumerate(candidates):
         y = 0.51 - index * 0.22
@@ -369,7 +396,7 @@ def draw_overview(frame: pd.DataFrame, stats: dict[str, float | int], output: Pa
     fig.text(
         0.055,
         0.027,
-        "출처: 팀 최종보고서 및 최종 PCA 결과. 원천·행정동별 데이터는 공개하지 않고 집계 결과만 재시각화함.",
+        "출처: 팀 최종보고서와 최종 PCA 결과. 점 하나가 행정동 하나의 최종 지수 위치이며, 원천 데이터와 행정동별 수치 표는 포함하지 않음.",
         fontsize=8.5,
         color=MUTED,
     )
