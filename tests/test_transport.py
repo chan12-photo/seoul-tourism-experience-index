@@ -31,6 +31,20 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(result["D2_nearest_hub"].tolist(), ["right", "left"])
         self.assertTrue((result["D2_access"] <= 0).all())
 
+    def test_origin_and_hub_key_names_may_match(self) -> None:
+        origins = pd.DataFrame({"key": ["origin"], "longitude": [127.0], "latitude": [37.5]})
+        hubs = pd.DataFrame({"key": ["hub"], "longitude": [127.1], "latitude": [37.5]})
+        result = nearest_hub_distance(origins, hubs, hub_name="key")
+
+        self.assertEqual(result.loc[0, "key"], "origin")
+        self.assertEqual(result.loc[0, "D2_nearest_hub"], "hub")
+
+    def test_passthrough_cannot_shadow_generated_features(self) -> None:
+        origins = pd.DataFrame({"key": ["origin"], "longitude": [127.0], "latitude": [37.5]})
+        hubs = pd.DataFrame({"hub_name": ["hub"], "longitude": [127.1], "latitude": [37.5]})
+        with self.assertRaisesRegex(ValueError, "generated D2"):
+            nearest_hub_distance(origins, hubs, passthrough=["D2_access"])
+
     def test_final_transport_names_are_consistent(self) -> None:
         keys = {
             "administrative_dong_code": ["1", "2"],

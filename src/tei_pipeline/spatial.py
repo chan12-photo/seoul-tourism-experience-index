@@ -22,6 +22,8 @@ def count_points_by_polygon(
     boundary_keys = list(boundary_keys)
     if not boundary_keys:
         raise ValueError("At least one boundary key is required")
+    if len(boundary_keys) != len(set(boundary_keys)):
+        raise ValueError("Boundary key columns must be unique")
 
     required = {longitude, latitude}
     if point_id:
@@ -49,8 +51,12 @@ def count_points_by_polygon(
         import geopandas as gpd
     except ImportError as exc:
         raise RuntimeError('Install spatial dependencies with: pip install -e ".[geo]"') from exc
+    # Keep only columns needed by the spatial join. Carrying arbitrary point
+    # attributes into sjoin lets overlapping names collide with boundary keys
+    # (for example, points.district versus boundaries.district).
+    point_columns = [longitude, latitude]
     point_geometry = gpd.points_from_xy(clean[longitude], clean[latitude], crs="EPSG:4326")
-    point_geo = gpd.GeoDataFrame(clean, geometry=point_geometry)
+    point_geo = gpd.GeoDataFrame(clean.loc[:, point_columns], geometry=point_geometry)
 
     boundaries = gpd.read_file(boundary_path)
     missing_keys = sorted(set(boundary_keys) - set(boundaries.columns))

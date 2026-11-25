@@ -58,6 +58,14 @@ def nearest_hub_distance(
         raise ValueError("Origin and passthrough column names must be unique")
     if len(hub_columns) != len(set(hub_columns)):
         raise ValueError("Hub column names must be unique")
+    generated_columns = {
+        "D2_nearest_hub",
+        "D2_min_distance_km",
+        "D2_distance_score",
+        "D2_access",
+    }
+    if generated_columns.intersection({origin_id, *passthrough}):
+        raise ValueError("Origin and passthrough columns cannot use generated D2 names")
     _require_columns(origins, origin_columns, "origins")
     _require_columns(hubs, hub_columns, "hubs")
     if origins[origin_id].isna().any():
@@ -69,17 +77,41 @@ def nearest_hub_distance(
     if origins.empty or hubs.empty:
         raise ValueError("origins and hubs must both contain at least one row")
 
+    # Use private merge keys so a caller can legitimately use the same column
+    # name for origin_id and hub_name (or for a passthrough field) without
+    # pandas turning the key into ``key_x``/``key_y``.
+    reserved = {
+        "__tei_origin_id",
+        "__tei_hub_name",
+        "__tei_origin_lon",
+        "__tei_origin_lat",
+        "__tei_hub_lon",
+        "__tei_hub_lat",
+    }
+    if reserved.intersection(origins.columns) or reserved.intersection(hubs.columns):
+        raise ValueError("Input columns use reserved internal transport names")
     left = origins.loc[:, origin_columns].rename(
-        columns={origin_lon: "origin_lon", origin_lat: "origin_lat"}
+        columns={
+            origin_id: "__tei_origin_id",
+            origin_lon: "__tei_origin_lon",
+            origin_lat: "__tei_origin_lat",
+        }
     )
-    right = hubs.loc[:, hub_columns].rename(columns={hub_lon: "hub_lon", hub_lat: "hub_lat"})
+    right = hubs.loc[:, hub_columns].rename(
+        columns={hub_name: "__tei_hub_name", hub_lon: "__tei_hub_lon", hub_lat: "__tei_hub_lat"}
+    )
     pairs = left.merge(right, how="cross")
     pairs["D2_min_distance_km"] = haversine_km(
-        pairs["origin_lon"], pairs["origin_lat"], pairs["hub_lon"], pairs["hub_lat"]
+        pairs["__tei_origin_lon"],
+        pairs["__tei_origin_lat"],
+        pairs["__tei_hub_lon"],
+        pairs["__tei_hub_lat"],
     )
-    nearest_index = pairs.groupby(origin_id)["D2_min_distance_km"].idxmin()
+    nearest_index = pairs.groupby("__tei_origin_id")["D2_min_distance_km"].idxmin()
     result = pairs.loc[nearest_index].copy()
-    result = result.rename(columns={hub_name: "D2_nearest_hub"})
+    result = result.rename(
+        columns={"__tei_origin_id": origin_id, "__tei_hub_name": "D2_nearest_hub"}
+    )
     result["D2_distance_score"] = reverse_minmax(result["D2_min_distance_km"])
     result["D2_access"] = -result["D2_min_distance_km"]
     output_columns = [

@@ -10,6 +10,29 @@ from tei_pipeline.spatial import count_points_by_polygon
 
 
 class SpatialValidationTests(unittest.TestCase):
+    def test_point_columns_do_not_shadow_boundary_keys(self) -> None:
+        boundaries = gpd.GeoDataFrame(
+            {"district": ["boundary-A"]},
+            geometry=[box(0.0, 0.0, 1.0, 1.0)],
+            crs="EPSG:4326",
+        )
+        points = pd.DataFrame(
+            {"point_id": ["p1"], "longitude": [0.5], "latitude": [0.5], "district": ["point-A"]}
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            boundary_path = Path(directory) / "boundaries.geojson"
+            boundaries.to_file(boundary_path, driver="GeoJSON")
+            result = count_points_by_polygon(
+                points,
+                boundary_path,
+                longitude="longitude",
+                latitude="latitude",
+                boundary_keys=["district"],
+                point_id="point_id",
+            )
+
+        self.assertEqual(result.to_dict("records"), [{"district": "boundary-A", "point_count": 1}])
+
     def test_points_are_counted_and_duplicate_ids_removed(self) -> None:
         boundaries = gpd.GeoDataFrame(
             {"code": ["left", "right"]},
